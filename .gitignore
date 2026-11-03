@@ -1,0 +1,36 @@
+# Secrets and environment variables
+.env
+.env*.local
+*.env
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+ENV/
+*.pt
+tmpdir_speechbrain/
+
+# Audio files (do not upload personal recordings)
+*.wav
+*.wav.jpeg
+*.webm
+stream_*.webm
+*_bio.wav
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# macOS System Files
+.DS_Store
+*.pem
