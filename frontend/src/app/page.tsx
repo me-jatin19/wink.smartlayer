@@ -1,507 +1,533 @@
-"use client";
+import Image from "next/image";
+import LayerStack from "@/components/LayerStack";
+import LiveDemo from "@/components/LiveDemo";
+import Reveal from "@/components/Reveal";
 
-import { useState, useRef, useEffect } from "react";
+const PHRASES = [
+  "“Pay Sharma Ji two hundred”",
+  "“Order milk and eggs from Blinkit”",
+  "“Book an Uber to Terminal 3”",
+  "“Send ₹500 to Mom”",
+  "“Pay for this coffee”",
+  "“Transfer rent to Arjun”",
+];
 
-type StepStatus = "idle" | "recording" | "biometrics" | "gemini" | "complete" | "denied";
+const NAV = [
+  { href: "#layers", label: "Layers" },
+  { href: "#flow", label: "How it works" },
+  { href: "#trust", label: "Security" },
+  { href: "#demo", label: "Live demo" },
+];
 
-interface Transaction {
-  id: number;
-  title: string;
-  category: string;
-  date: string;
-  amount: number;
-  type: "debit" | "credit";
-  iconBg: string;
+export default function Home() {
+  return (
+    <div className="relative overflow-x-clip">
+      <Nav />
+      <Hero />
+      <Marquee />
+      <WhySection />
+      <LayersSection />
+      <FlowSection />
+      <TrustSection />
+      <DemoSection />
+      <UseCases />
+      <FinalCta />
+      <Footer />
+    </div>
+  );
 }
 
-export default function WinkAmbientExperience() {
-  const [balance, setBalance] = useState<number>(5750);
-  const [displayBalance, setDisplayBalance] = useState<number>(5750);
-  const [isDeducting, setIsDeducting] = useState<boolean>(false);
+/* ───────────────────────────── Nav ───────────────────────────── */
 
-  const [step, setStep] = useState<StepStatus>("idle");
-  const [statusMessage, setStatusMessage] = useState<string>("Smart Eyewear Ready");
-  const [similarityScore, setSimilarityScore] = useState<number | null>(null);
-  const [lastSpokenText, setLastSpokenText] = useState<string>("");
-
-  const [transactions, setTransactions] = useState<Transaction[]>([
-    {
-      id: 1,
-      title: "Blinkit Instant",
-      category: "Organic Milk & Apples",
-      date: "Today, 2:14 PM",
-      amount: 139,
-      type: "debit",
-      iconBg: "bg-blue-50 text-blue-600",
-    },
-    {
-      id: 2,
-      title: "Uber Premier",
-      category: "Drop to Airport Terminal 3",
-      date: "Yesterday",
-      amount: 380,
-      type: "debit",
-      iconBg: "bg-indigo-50 text-indigo-600",
-    },
-    {
-      id: 3,
-      title: "Cashback from WINK",
-      category: "50% Optical Launch Reward",
-      date: "2 Oct 2026",
-      amount: 50,
-      type: "credit",
-      iconBg: "bg-emerald-50 text-emerald-600",
-    },
-    {
-      id: 4,
-      title: "Sharma Ji Grocery",
-      category: "Direct Voice UPI",
-      date: "28 Sep 2026",
-      amount: 500,
-      type: "debit",
-      iconBg: "bg-sky-50 text-sky-600",
-    },
-  ]);
-
-  const ws = useRef<WebSocket | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const animationFrameRef = useRef<number | null>(null);
-  const globeCanvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  useEffect(() => {
-    const canvas = globeCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    let rot = 0;
-    let animId: number;
-
-    const render = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const cx = canvas.width / 2;
-      const cy = canvas.height / 2;
-      const r = 75;
-
-      rot += 0.012;
-
-      ctx.strokeStyle = "rgba(59, 130, 246, 0.35)";
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.stroke();
-
-      for (let lat = -60; lat <= 60; lat += 30) {
-        const rad = (lat * Math.PI) / 180;
-        const currentR = r * Math.cos(rad);
-        const y = cy + r * Math.sin(rad);
-
-        ctx.strokeStyle = "rgba(59, 130, 246, 0.18)";
-        ctx.beginPath();
-        ctx.ellipse(cx, y, currentR, currentR * 0.22, 0, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      for (let lon = 0; lon < 180; lon += 30) {
-        const rad = ((lon + rot * 40) * Math.PI) / 180;
-        const xOffset = Math.sin(rad) * r;
-
-        ctx.strokeStyle = Math.cos(rad) > 0 ? "rgba(96, 165, 250, 0.3)" : "rgba(37, 99, 235, 0.1)";
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, Math.abs(xOffset), r, 0, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      animId = requestAnimationFrame(render);
-    };
-
-    render();
-    return () => cancelAnimationFrame(animId);
-  }, []);
-
-  useEffect(() => {
-    if (displayBalance === balance) {
-      setIsDeducting(false);
-      return;
-    }
-
-    setIsDeducting(true);
-    const startValue = displayBalance;
-    const endValue = balance;
-    const duration = 1200;
-    const startTime = performance.now();
-
-    const updateTicker = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progressRatio = Math.min(elapsed / duration, 1);
-      const easeOut = 1 - Math.pow(1 - progressRatio, 3);
-      const currentVal = Math.round(startValue - (startValue - endValue) * easeOut);
-
-      setDisplayBalance(currentVal);
-
-      if (progressRatio < 1) {
-        animationFrameRef.current = requestAnimationFrame(updateTicker);
-      } else {
-        setDisplayBalance(endValue);
-        setIsDeducting(false);
-      }
-    };
-
-    animationFrameRef.current = requestAnimationFrame(updateTicker);
-    return () => {
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    };
-  }, [balance]);
-
-  useEffect(() => {
-    const socket = new WebSocket("ws://localhost:8000/ws");
-    ws.current = socket;
-
-    socket.onopen = () => setStatusMessage("Optical Bus Synced • PTT Ready");
-
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-
-        if (data.type === "BIOMETRIC_DENIED") {
-          setStep("denied");
-          setSimilarityScore(data.score);
-          setStatusMessage("Voice Mismatch (" + (data.score * 100).toFixed(0) + "%)");
-          setTimeout(() => setStep("idle"), 3000);
-        } else if (data.type === "BIOMETRIC_ACCEPTED") {
-          setStep("gemini");
-          setSimilarityScore(data.score);
-          setStatusMessage("Voice Authenticated • NLU Extraction...");
-        } else if (data.type === "EXECUTE_TRANSACTION") {
-          const payload = data.payload;
-          setStep("complete");
-
-          const costVal = payload.amount || (payload.action === "PAY" ? 200 : 150);
-          const rawText = payload.transcription || "Voice checkout";
-          setLastSpokenText(rawText);
-
-          let title = payload.recipient || "Autonomous Pay";
-          let category = "Instant Settlement";
-          let iconBg = "bg-blue-50 text-blue-600";
-
-          if (/blinkit|milk|bread|eggs|grocery|apples/i.test(rawText)) {
-            title = "Blinkit Instant";
-            category = "Grocery Basket";
-            iconBg = "bg-amber-50 text-amber-600";
-          } else if (/uber|cab|ride|ola|drive/i.test(rawText)) {
-            title = "Uber Premier";
-            category = "Ride Allocation";
-            iconBg = "bg-slate-100 text-slate-800";
-          }
-
-          setBalance((prev) => Math.max(0, prev - costVal));
-          setTransactions((prev) => [
-            {
-              id: Date.now(),
-              title,
-              category,
-              date: "Just now",
-              amount: costVal,
-              type: "debit",
-              iconBg,
-            },
-            ...prev,
-          ]);
-
-          setStatusMessage("Settlement Displayed in Eyewear HUD");
-          setTimeout(() => setStep("idle"), 3500);
-        }
-      } catch {
-        setStatusMessage("Signal processing error");
-      }
-    };
-
-    socket.onclose = () => setStatusMessage("Eyewear Offline");
-    return () => socket.close();
-  }, []);
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-          channelCount: 1,
-          sampleRate: 16000,
-        },
-      });
-
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : "audio/mp4";
-
-      const recorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = recorder;
-      audioChunksRef.current = [];
-
-      recorder.ondataavailable = (e: BlobEvent) => {
-        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      recorder.onstop = async () => {
-        if (audioChunksRef.current.length === 0) {
-          setStep("idle");
-          return;
-        }
-
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        if (audioBlob.size < 2500) {
-          setStep("idle");
-          return;
-        }
-
-        setStep("biometrics");
-        setStatusMessage("Extracting ECAPA Embeddings...");
-
-        const arrayBuffer = await audioBlob.arrayBuffer();
-        if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-          ws.current.send(arrayBuffer);
-        }
-        stream.getTracks().forEach((t) => t.stop());
-      };
-
-      recorder.start(250);
-      setStep("recording");
-      setLastSpokenText("");
-      setStatusMessage("Listening from Dual Frame Mics...");
-    } catch {
-      setStatusMessage("Microphone permission denied");
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.requestData();
-      mediaRecorderRef.current.stop();
-    }
-  };
-
+function Logo() {
   return (
-    <div className="min-h-screen bg-[#F0F3F8] text-slate-800 font-sans antialiased flex flex-col justify-between p-4 sm:p-8 select-none">
-      <header className="max-w-6xl mx-auto w-full flex justify-between items-center pb-4 border-b border-slate-200">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-sm shadow-md shadow-blue-500/20">
-            W
+    <a href="#top" className="flex items-center gap-2.5" aria-label="WINK.smartlayer home">
+      <span className="relative grid h-8 w-8 place-items-center rounded-[10px] bg-gradient-to-br from-accent to-accent-2 shadow-[0_0_24px_rgba(79,140,255,0.45)]">
+        <span className="h-2.5 w-4 rounded-full border-2 border-black/80 border-t-transparent" />
+      </span>
+      <span className="text-[15px] font-semibold tracking-tight">
+        WINK<span className="text-fg-dim">.smartlayer</span>
+      </span>
+    </a>
+  );
+}
+
+function Nav() {
+  return (
+    <header className="fixed inset-x-0 top-0 z-50">
+      <div className="mx-4 sm:mx-auto mt-3 flex max-w-6xl items-center justify-between rounded-2xl glass px-4 py-2.5 sm:px-5">
+        <Logo />
+        <nav className="hidden md:flex items-center gap-1">
+          {NAV.map((n) => (
+            <a key={n.href} href={n.href} className="rounded-lg px-3 py-1.5 text-[13px] text-fg-muted hover:text-fg hover:bg-white/5 transition">
+              {n.label}
+            </a>
+          ))}
+        </nav>
+        <a
+          href="#demo"
+          className="rounded-xl bg-fg px-3.5 py-2 text-[13px] font-semibold text-bg hover:bg-white/90 transition"
+        >
+          Try it live
+        </a>
+      </div>
+    </header>
+  );
+}
+
+/* ───────────────────────────── Hero ───────────────────────────── */
+
+function Hero() {
+  return (
+    <section id="top" className="relative pt-32 sm:pt-40 pb-16">
+      <div className="absolute inset-0 bg-grid" aria-hidden />
+      <div className="absolute left-1/2 top-24 h-[520px] w-[900px] max-w-[120vw] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(79,140,255,0.22),transparent)]" aria-hidden />
+      <div className="absolute right-[8%] top-[42%] h-56 w-56 rounded-full bg-signal/10 blur-3xl" aria-hidden />
+
+      <div className="relative mx-auto max-w-6xl px-4 sm:px-6 text-center">
+        <Reveal>
+          <span className="inline-flex items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3 py-1 text-xs text-fg-muted">
+            <span className="h-1.5 w-1.5 rounded-full bg-signal shadow-[0_0_10px_var(--signal)]" />
+            The ambient payment layer for smart eyewear
+          </span>
+        </Reveal>
+
+        <Reveal delay={80}>
+          <h1 className="mx-auto mt-6 max-w-4xl text-[clamp(2.6rem,7vw,5.6rem)] font-semibold leading-[0.98] tracking-[-0.035em]">
+            Pay with a <span className="font-serif italic font-normal text-gradient pr-1">word.</span>
+            <br />
+            Verified by your <span className="font-serif italic font-normal text-gradient pr-1">voice.</span>
+          </h1>
+        </Reveal>
+
+        <Reveal delay={160}>
+          <p className="mx-auto mt-6 max-w-2xl text-base sm:text-lg leading-relaxed text-fg-muted">
+            WINK turns a spoken sentence into a settled payment. No phone, no PIN, no screen to tap.
+            Your voiceprint unlocks it, AI works out what you meant, and the receipt shows up in your lens.
+          </p>
+        </Reveal>
+
+        <Reveal delay={240}>
+          <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <a href="#demo" className="group inline-flex items-center gap-2 rounded-2xl bg-accent px-6 py-3.5 text-sm font-semibold text-white shadow-[0_12px_40px_rgba(79,140,255,0.4)] hover:brightness-110 transition">
+              Try the live demo
+              <span className="transition-transform group-hover:translate-x-0.5">→</span>
+            </a>
+            <a href="#layers" className="inline-flex items-center gap-2 rounded-2xl border border-line-strong bg-white/[0.03] px-6 py-3.5 text-sm font-semibold text-fg hover:bg-white/[0.07] transition">
+              Explore the 5 layers
+            </a>
           </div>
-          <div>
-            <span className="font-black text-lg tracking-tight text-slate-900 block leading-tight">
-              WINK<span className="text-blue-600">.smartlayer</span>
-            </span>
-            <span className="text-[10px] font-mono tracking-wider text-slate-400 uppercase">
-              Micro-OLED Ambient Neural Terminal
-            </span>
+        </Reveal>
+
+        {/* Product shot with HUD call-outs */}
+        <Reveal delay={320} className="relative mx-auto mt-16 sm:mt-20 max-w-4xl">
+          <div className="relative mx-auto aspect-[737/339] w-full max-w-[760px]">
+            <div className="absolute inset-x-[10%] bottom-[-6%] h-10 rounded-[50%] bg-black/70 blur-2xl" aria-hidden />
+            <div className="animate-float h-full w-full">
+              <Image
+                src="/glasses.png"
+                alt="Smart eyewear running WINK.smartlayer"
+                fill
+                preload
+                sizes="(max-width: 768px) 100vw, 760px"
+                className="object-contain drop-shadow-[0_40px_60px_rgba(0,0,0,0.7)]"
+              />
+            </div>
+
+            <Callout className="left-[0%] top-[-6%] sm:left-[-4%] sm:top-[2%]" dot="var(--signal)" label="L1 · Capture" text="Hold temple to speak" />
+            <Callout className="right-[0%] top-[-14%] sm:right-[-2%] sm:top-[-8%]" dot="var(--ok)" label="L3 · Voice gate" text="Owner verified ✓" />
+            <Callout className="right-[4%] bottom-[-10%] sm:right-[8%] sm:bottom-[-4%]" dot="var(--accent-2)" label="L5 · HUD" text="Paid ₹200 → Sharma Ji" />
           </div>
-        </div>
+        </Reveal>
 
-        <div className="flex items-center gap-2 bg-white px-3.5 py-1.5 rounded-full border border-slate-200 shadow-xs text-xs font-semibold text-slate-700">
-          <span className={"w-2 h-2 rounded-full " + (ws.current && ws.current.readyState === 1 ? "bg-emerald-500 animate-pulse" : "bg-amber-400 animate-ping")} />
-          <span className="font-mono text-[11px]">{ws.current && ws.current.readyState === 1 ? "Optics Synced" : "Connecting Core"}</span>
-        </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center my-auto py-6">
-        <div className="lg:col-span-7 flex flex-col gap-4">
-          <div className="bg-[#0B0F19] rounded-[32px] p-6 text-white border border-slate-800 shadow-2xl relative overflow-hidden flex flex-col justify-between min-h-[390px]">
-            <div className="flex justify-between items-start z-10">
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-blue-400 font-bold block">
-                  Frame Array • Model AirGo
-                </span>
-                <h3 className="text-base font-extrabold text-white tracking-tight">
-                  Dual-Beamforming Lens Perspective
-                </h3>
-              </div>
-              <div className="flex items-center gap-2 font-mono text-[10px] bg-blue-950/70 border border-blue-500/30 text-blue-300 px-3 py-1 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                42° Waveguide FOV
-              </div>
+        {/* Facts strip */}
+        <Reveal delay={120} className="mx-auto mt-20 sm:mt-24 grid max-w-4xl grid-cols-2 md:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-line bg-line">
+          {[
+            ["5", "layers, from voice to receipt"],
+            ["0", "taps, PINs or screens"],
+            ["1", "sentence to pay"],
+            ["≥ 0.25", "cosine voice-match gate"],
+          ].map(([k, v]) => (
+            <div key={v} className="bg-bg px-5 py-5 text-left">
+              <p className="text-2xl sm:text-3xl font-semibold tracking-tight">{k}</p>
+              <p className="mt-1 text-xs sm:text-[13px] text-fg-muted">{v}</p>
             </div>
+          ))}
+        </Reveal>
+      </div>
+    </section>
+  );
+}
 
-            <div className="absolute inset-0 flex items-center justify-center opacity-35 pointer-events-none">
-              <canvas ref={globeCanvasRef} width={260} height={260} className="w-[210px] h-[210px]" />
-            </div>
-
-            <div className="relative z-10 flex flex-col items-center justify-center my-4">
-              <div className="relative">
-                <img
-                  src="/glasses.png"
-                  alt="WINK Smart Eyewear"
-                  className={"w-[440px] max-w-full object-contain transition-all duration-300 " + (step === "recording" ? "scale-105 drop-shadow-[0_0_30px_rgba(59,130,246,0.7)]" : "drop-shadow-xl")}
-                />
-                <div className="absolute -top-2 right-14 flex items-center gap-1.5 bg-blue-600/95 border border-blue-400 text-white px-2.5 py-0.5 rounded-full shadow-lg text-[10px] font-mono font-semibold pointer-events-none">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-                  <span>Right Temple PTT</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-between items-center z-10 pt-3 border-t border-slate-800 text-xs font-mono">
-              <div className="flex items-center gap-2">
-                <span className={"w-2 h-2 rounded-full " + (
-                  step === "recording" ? "bg-rose-500 animate-ping" : step === "biometrics" ? "bg-amber-400 animate-bounce" : "bg-blue-500"
-                )} />
-                <span className="text-slate-300 font-semibold">{statusMessage}</span>
-              </div>
-              {similarityScore !== null && (
-                <span className={"font-mono text-[11px] font-bold px-2 py-0.5 rounded " + (
-                  similarityScore >= 0.25 ? "text-emerald-400 bg-emerald-950/60" : "text-rose-400 bg-rose-950/60"
-                )}>
-                  Match: {(similarityScore * 100).toFixed(0)}%
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Model</span>
-              <span className="text-xs font-extrabold text-slate-900 mt-1 block font-mono">ECAPA-TDNN</span>
-            </div>
-            <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">NLU Engine</span>
-              <span className="text-xs font-extrabold text-blue-600 mt-1 block font-mono">Gemini 2.5 Flash</span>
-            </div>
-            <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Biometric Gate</span>
-              <span className="text-xs font-extrabold text-emerald-600 mt-1 block font-mono">Threshold 0.25</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="lg:col-span-5 flex justify-center">
-          <div className="w-[330px] sm:w-[350px] bg-white rounded-[44px] shadow-[0_25px_70px_rgba(0,0,0,0.12)] border-[8px] border-slate-900 p-5 flex flex-col justify-between relative overflow-hidden">
-            <div>
-              <div className="flex justify-between items-center text-[11px] font-bold text-slate-800 px-2 pt-1 pb-3 font-mono">
-                <span>9:41</span>
-                <div className="flex items-center gap-1.5 text-slate-700">
-                  <span className="text-[10px]">5G</span>
-                  <div className="w-5 h-2.5 border border-slate-700 rounded-sm p-0.5 flex items-center">
-                    <div className="w-3 h-1.5 bg-slate-900 rounded-2xs" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center mt-1 px-1">
-                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 text-sm">
-                  ←
-                </div>
-                <h3 className="font-extrabold text-base text-slate-900">My Wallet</h3>
-                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 text-xs font-bold font-mono">
-                  JS
-                </div>
-              </div>
-
-              <div className="mt-4 relative overflow-hidden rounded-3xl bg-gradient-to-tr from-[#2563EB] via-[#3B82F6] to-[#60A5FA] p-5 text-white shadow-xl shadow-blue-500/25">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-blue-100 opacity-90 font-mono">Current Balance</span>
-                    <div className="flex items-baseline gap-1 mt-0.5">
-                      <span className="text-3xl font-black tracking-tight tabular-nums font-mono">
-                        ${displayBalance.toLocaleString("en-US")}
-                      </span>
-                      {isDeducting && (
-                        <span className="text-[9px] font-bold bg-white/20 border border-white/30 px-1.5 py-0.5 rounded-full animate-pulse ml-1 font-mono">
-                          Live Sync
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-xs font-black tracking-tight bg-white/20 px-2 py-1 rounded-lg backdrop-blur-md font-mono">
-                    WINK
-                  </span>
-                </div>
-
-                <div className="mt-6 flex justify-between items-end text-xs font-mono tracking-widest text-blue-100">
-                  <span>5282 3456 7890 1289</span>
-                  <span className="text-[11px] font-bold">09/28</span>
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <div className="flex justify-between items-center px-1 mb-2">
-                  <h4 className="text-xs font-black text-slate-900">Recent Transaction</h4>
-                  <span className="text-[10px] font-bold text-blue-600 cursor-pointer">See All</span>
-                </div>
-
-                <div className="space-y-1.5">
-                  {transactions.slice(0, 3).map((tx) => (
-                    <div key={tx.id} className="flex items-center justify-between p-2 rounded-2xl hover:bg-slate-50 transition-colors">
-                      <div className="flex items-center gap-2.5">
-                        <div className={"w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs " + tx.iconBg}>
-                          {tx.title.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-800 leading-tight">{tx.title}</p>
-                          <p className="text-[9px] text-slate-400 font-medium">{tx.category}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className={"text-xs font-black tabular-nums " + (tx.type === "credit" ? "text-emerald-600" : "text-slate-900")}>
-                          {tx.type === "credit" ? "+" : "-"}${tx.amount}
-                        </p>
-                        <p className="text-[9px] text-slate-400 font-mono">{tx.date}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-3 pt-3 border-t border-slate-100">
-              <div className="bg-slate-900 text-white p-2.5 rounded-2xl shadow-lg flex items-center justify-between">
-                <div className="flex items-center gap-2 pl-1 truncate max-w-[170px]">
-                  <div className={"w-2 h-2 rounded-full " + (
-                    step === "recording" ? "bg-rose-500 animate-ping" : step === "biometrics" || step === "gemini" ? "bg-amber-400 animate-bounce" : "bg-cyan-400"
-                  )} />
-                  <div className="truncate">
-                    <p className="text-[10px] font-bold truncate text-slate-200 font-mono">{statusMessage}</p>
-                    {similarityScore !== null && (
-                      <p className="text-[9px] text-emerald-400 font-mono">{(similarityScore * 100).toFixed(0)}% Match</p>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  onMouseDown={startRecording}
-                  onMouseUp={stopRecording}
-                  onTouchStart={startRecording}
-                  onTouchEnd={stopRecording}
-                  className={"px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer " + (
-                    step === "recording"
-                      ? "bg-rose-500 text-white scale-105"
-                      : step === "biometrics" || step === "gemini"
-                      ? "bg-blue-600 text-white animate-pulse"
-                      : "bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-500/30"
-                  )}
-                >
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 02-3-3V5a3 3 0 116 0v6a3 3 0 02-3 3z" />
-                  </svg>
-                  <span>{step === "recording" ? "Rec..." : "PTT"}</span>
-                </button>
-              </div>
-
-              {lastSpokenText && (
-                <p className="text-[9px] text-center text-slate-500 italic mt-1.5 truncate">
-                  "{lastSpokenText}"
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </main>
-
-      <footer className="max-w-6xl mx-auto w-full pt-4 border-t border-slate-200 flex justify-between text-xs text-slate-400 font-medium font-mono">
-        <span>WINK Pay × Autonomous Smart Eyewear Interface</span>
-        <span className="text-[10px]">VER 2.5 • SPEECHBRAIN × GEMINI FLASH</span>
-      </footer>
+function Callout({ className, dot, label, text }: { className: string; dot: string; label: string; text: string }) {
+  return (
+    <div className={`absolute hidden sm:block rounded-2xl glass px-3.5 py-2.5 text-left shadow-2xl ${className}`}>
+      <p className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.2em] text-fg-dim">
+        <span className="h-1.5 w-1.5 rounded-full" style={{ background: dot, boxShadow: `0 0 8px ${dot}` }} />
+        {label}
+      </p>
+      <p className="mt-0.5 text-[13px] font-medium text-fg">{text}</p>
     </div>
+  );
+}
+
+/* ───────────────────────────── Marquee ───────────────────────────── */
+
+function Marquee() {
+  const items = [...PHRASES, ...PHRASES];
+  return (
+    <section aria-label="Things you can say" className="relative border-y border-line py-5 overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_12%,#000_88%,transparent)]">
+      <div className="flex w-max animate-marquee gap-10">
+        {items.map((p, i) => (
+          <span key={i} className="flex items-center gap-10 whitespace-nowrap font-serif italic text-xl sm:text-2xl text-fg-muted">
+            {p}
+            <span className="h-1 w-1 rounded-full bg-fg-dim not-italic" />
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ───────────────────────────── Why ───────────────────────────── */
+
+function SectionHeader({ eyebrow, title, body }: { eyebrow: string; title: React.ReactNode; body?: string }) {
+  return (
+    <Reveal className="max-w-2xl">
+      <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-accent">{eyebrow}</p>
+      <h2 className="mt-3 text-[clamp(2rem,4.5vw,3.25rem)] font-semibold leading-[1.05] tracking-[-0.03em]">{title}</h2>
+      {body && <p className="mt-4 text-fg-muted leading-relaxed sm:text-lg">{body}</p>}
+    </Reveal>
+  );
+}
+
+function WhySection() {
+  const cards = [
+    {
+      title: "No phone",
+      body: "Your hands stay on the shopping bag, the steering wheel or the coffee cup. The glasses you already wear do the job.",
+      icon: (
+        <path d="M8 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm-4 18L20 3" />
+      ),
+    },
+    {
+      title: "No PIN",
+      body: "Nothing to type and nothing to remember. A neural voiceprint is checked on every request.",
+      icon: <path d="M12 3a4 4 0 0 1 4 4v3H8V7a4 4 0 0 1 4-4ZM6 10h12v10H6zM12 14v2" />,
+    },
+    {
+      title: "No screen",
+      body: "The confirmation appears in the corner of your vision, so you never have to look down.",
+      icon: <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" />,
+    },
+  ];
+  return (
+    <section className="mx-auto max-w-6xl px-4 sm:px-6 py-24 sm:py-32">
+      <SectionHeader
+        eyebrow="Why WINK"
+        title={
+          <>
+            Checkout should work like <span className="font-serif italic font-normal text-fg-muted">talking</span>.
+          </>
+        }
+        body="Every payment today asks for your attention: unlock, open, scan, confirm. WINK handles all of that while you just say what you want."
+      />
+      <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
+        {cards.map((c, i) => (
+          <Reveal key={c.title} delay={i * 90} as="article" className="group relative rounded-3xl glass p-7 overflow-hidden hover:border-line-strong transition">
+            <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-accent/10 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <svg viewBox="0 0 24 24" className="h-6 w-6 text-accent" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              {c.icon}
+            </svg>
+            <h3 className="mt-6 text-xl font-semibold tracking-tight">{c.title}</h3>
+            <p className="mt-2 text-[15px] leading-relaxed text-fg-muted">{c.body}</p>
+          </Reveal>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ───────────────────────────── Layers ───────────────────────────── */
+
+function LayersSection() {
+  return (
+    <section id="layers" className="relative scroll-mt-24 py-24 sm:py-32">
+      <div className="absolute inset-0 bg-[radial-gradient(60%_50%_at_25%_50%,rgba(79,140,255,0.08),transparent)]" aria-hidden />
+      <div className="relative mx-auto max-w-6xl px-4 sm:px-6">
+        <SectionHeader
+          eyebrow="The smart layer"
+          title={
+            <>
+              Five layers.
+              <br />
+              <span className="text-fg-muted">One spoken sentence.</span>
+            </>
+          }
+          body="WINK sits between your voice and your money. Each layer does one job and passes the request to the next one only if that job succeeds."
+        />
+        <Reveal className="mt-10">
+          <LayerStack />
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+/* ───────────────────────────── Flow ───────────────────────────── */
+
+function FlowSection() {
+  return (
+    <section id="flow" className="scroll-mt-24 mx-auto max-w-6xl px-4 sm:px-6 py-24 sm:py-32">
+      <SectionHeader
+        eyebrow="How it works"
+        title={
+          <>
+            From sentence to <span className="font-serif italic font-normal">settlement</span>.
+          </>
+        }
+        body="Here is the same request as it moves through the stack."
+      />
+
+      <div className="mt-12 grid grid-cols-1 lg:grid-cols-3 gap-4 relative">
+        <Reveal as="article" className="rounded-3xl glass p-6 flex flex-col">
+          <StepLabel n="01" color="var(--signal)" label="You say" />
+          <div className="mt-6 flex-1 flex items-center">
+            <p className="font-serif italic text-3xl sm:text-4xl leading-tight">“Pay Sharma Ji two hundred.”</p>
+          </div>
+          <div className="mt-6 flex h-8 items-end gap-[3px]" aria-hidden>
+            {Array.from({ length: 42 }).map((_, i) => (
+              <span
+                key={i}
+                className="w-[3px] flex-1 rounded-full bg-signal/70"
+                style={{ height: `${20 + Math.abs(Math.sin(i * 1.7) * 80)}%` }}
+              />
+            ))}
+          </div>
+        </Reveal>
+
+        <Reveal as="article" delay={100} className="rounded-3xl glass p-6 flex flex-col">
+          <StepLabel n="02" color="var(--ok)" label="WINK verifies & understands" />
+          <div className="mt-6 space-y-3 flex-1">
+            <div className="flex items-center justify-between rounded-xl border border-ok/25 bg-ok/5 px-4 py-3">
+              <span className="font-mono text-xs text-fg-muted">voiceprint ⋅ owner</span>
+              <span className="font-mono text-xs text-ok">match ✓</span>
+            </div>
+            <pre className="rounded-xl border border-line bg-black/40 p-4 font-mono text-[12.5px] leading-relaxed text-fg-muted overflow-x-auto">
+              <span className="text-fg-dim">{"{"}</span>
+              {"\n  "}<span className="text-accent-2">&quot;action&quot;</span>: <span className="text-fg">&quot;PAY&quot;</span>,
+              {"\n  "}<span className="text-accent-2">&quot;amount&quot;</span>: <span className="text-signal">200</span>,
+              {"\n  "}<span className="text-accent-2">&quot;recipient&quot;</span>: <span className="text-fg">&quot;Sharma Ji&quot;</span>
+              {"\n"}<span className="text-fg-dim">{"}"}</span>
+            </pre>
+          </div>
+        </Reveal>
+
+        <Reveal as="article" delay={200} className="rounded-3xl glass p-6 flex flex-col">
+          <StepLabel n="03" color="var(--accent-2)" label="You see" />
+          <div className="mt-6 flex-1 grid place-items-center">
+            <div className="relative w-full rounded-2xl border border-accent-2/30 bg-[radial-gradient(120%_100%_at_50%_0%,rgba(61,224,255,0.12),transparent)] p-5 text-center">
+              <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-accent-2">Paid</p>
+              <p className="mt-1 text-4xl font-semibold tracking-tight">₹200</p>
+              <p className="mt-1 text-sm text-fg-muted">to Sharma Ji · just now</p>
+            </div>
+          </div>
+          <p className="mt-6 text-sm text-fg-dim">The wallet balance and ledger update at the same moment.</p>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+function StepLabel({ n, color, label }: { n: string; color: string; label: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="font-mono text-xs" style={{ color }}>{n}</span>
+      <span className="h-px flex-1 bg-line" />
+      <span className="text-xs font-medium text-fg-muted">{label}</span>
+    </div>
+  );
+}
+
+/* ───────────────────────────── Trust ───────────────────────────── */
+
+function TrustSection() {
+  const points = [
+    {
+      title: "Voice before intent",
+      body: "The biometric gate runs first. An unverified voice is rejected before the language model ever hears it.",
+    },
+    {
+      title: "Embeddings, not recordings",
+      body: "The owner is enrolled as a normalised ECAPA-TDNN speaker embedding, a vector of numbers rather than a stored voice clip.",
+    },
+    {
+      title: "Ephemeral audio",
+      body: "Each spoken request is written to a temporary file and deleted as soon as it has been processed.",
+    },
+    {
+      title: "Strict, structured output",
+      body: "The intent engine must return a fixed JSON shape (action, amount, recipient) before anything is settled.",
+    },
+  ];
+  return (
+    <section id="trust" className="relative scroll-mt-24 py-24 sm:py-32">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 grid grid-cols-1 lg:grid-cols-12 gap-12">
+        <div className="lg:col-span-5">
+          <SectionHeader
+            eyebrow="Security by design"
+            title={
+              <>
+                Your voice is the key.
+                <br />
+                <span className="text-fg-muted">Nobody else&apos;s is.</span>
+              </>
+            }
+            body="Anyone can say “pay two hundred”. Only the enrolled owner's voice gets past the gate."
+          />
+          <Reveal delay={100} className="mt-8 rounded-3xl glass p-6">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-dim">Cosine similarity vs. owner</p>
+            <div className="mt-5 space-y-4">
+              <Bar label="Owner" value={0.72} tone="ok" />
+              <Bar label="Imposter" value={0.11} tone="bad" />
+            </div>
+            <p className="mt-4 text-xs text-fg-dim">Illustrative scores. The gate is set at 0.25.</p>
+          </Reveal>
+        </div>
+        <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4 content-center">
+          {points.map((p, i) => (
+            <Reveal key={p.title} delay={i * 80} as="article" className="rounded-3xl border border-line bg-white/[0.02] p-6">
+              <span className="font-mono text-xs text-accent">0{i + 1}</span>
+              <h3 className="mt-3 text-lg font-semibold tracking-tight">{p.title}</h3>
+              <p className="mt-2 text-[14.5px] leading-relaxed text-fg-muted">{p.body}</p>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Bar({ label, value, tone }: { label: string; value: number; tone: "ok" | "bad" }) {
+  const color = tone === "ok" ? "var(--ok)" : "var(--bad)";
+  return (
+    <div>
+      <div className="flex justify-between text-sm">
+        <span className="text-fg-muted">{label}</span>
+        <span className="font-mono" style={{ color }}>{value.toFixed(2)} {tone === "ok" ? "✓" : "✕"}</span>
+      </div>
+      <div className="relative mt-2 h-2 rounded-full bg-white/[0.06]">
+        <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${value * 100}%`, background: color, boxShadow: `0 0 16px ${color}` }} />
+        <div className="absolute -top-1.5 -bottom-1.5 w-px bg-white/70" style={{ left: "25%" }} />
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────────── Demo ───────────────────────────── */
+
+function DemoSection() {
+  return (
+    <section id="demo" className="relative scroll-mt-24 py-24 sm:py-32">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-line-strong to-transparent" aria-hidden />
+      <div className="absolute left-1/2 top-40 h-[500px] w-[900px] max-w-[120vw] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(79,140,255,0.12),transparent)]" aria-hidden />
+      <div className="relative mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+          <SectionHeader
+            eyebrow="Live demo"
+            title={
+              <>
+                Hear it. <span className="font-serif italic font-normal">See it settle.</span>
+              </>
+            }
+            body="With the WINK engine running locally, hold the button and speak a payment. Without it, run the labelled simulation to watch the same five layers."
+          />
+          <Reveal delay={100} className="shrink-0 rounded-2xl border border-line bg-black/30 px-4 py-3 font-mono text-[11px] text-fg-muted">
+            <span className="text-fg-dim">$</span> uvicorn main:app --port 8000
+          </Reveal>
+        </div>
+        <Reveal delay={80} className="mt-10">
+          <LiveDemo />
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+/* ───────────────────────────── Use cases ───────────────────────────── */
+
+function UseCases() {
+  const cases = [
+    { tag: "Quick commerce", line: "“Order milk and eggs from Blinkit”", color: "#f5c542" },
+    { tag: "Mobility", line: "“Book an Uber to Terminal 3”", color: "#e5e7eb" },
+    { tag: "Peer-to-peer UPI", line: "“Send ₹500 to Mom”", color: "#4f8cff" },
+    { tag: "Local merchants", line: "“Pay Sharma Ji two hundred”", color: "#34d399" },
+  ];
+  return (
+    <section className="mx-auto max-w-6xl px-4 sm:px-6 py-24 sm:py-32">
+      <SectionHeader eyebrow="Built for everyday" title="Wherever you'd reach for your phone." />
+      <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {cases.map((c, i) => (
+          <Reveal key={c.tag} delay={i * 70} as="article" className="group relative overflow-hidden rounded-3xl border border-line bg-white/[0.02] p-7 sm:p-8 hover:bg-white/[0.04] transition">
+            <span
+              className="absolute right-6 top-6 h-2.5 w-2.5 rounded-full"
+              style={{ background: c.color, boxShadow: `0 0 18px ${c.color}` }}
+            />
+            <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-fg-dim">{c.tag}</p>
+            <p className="mt-8 font-serif italic text-2xl sm:text-3xl leading-snug text-fg group-hover:translate-x-1 transition-transform">
+              {c.line}
+            </p>
+          </Reveal>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ───────────────────────────── CTA + footer ───────────────────────────── */
+
+function FinalCta() {
+  return (
+    <section className="mx-auto max-w-6xl px-4 sm:px-6 pb-24">
+      <Reveal className="relative overflow-hidden rounded-[36px] ring-gradient bg-bg-elev px-6 py-16 sm:px-14 sm:py-20 text-center">
+        <div className="absolute inset-0 bg-grid opacity-70" aria-hidden />
+        <div className="absolute left-1/2 top-0 h-72 w-[700px] max-w-full -translate-x-1/2 rounded-full bg-accent/20 blur-3xl" aria-hidden />
+        <div className="relative">
+          <h2 className="mx-auto max-w-3xl text-[clamp(2rem,5vw,3.75rem)] font-semibold leading-[1.02] tracking-[-0.03em]">
+            The last checkout you&apos;ll <span className="font-serif italic font-normal text-gradient">ever look at.</span>
+          </h2>
+          <p className="mx-auto mt-5 max-w-xl text-fg-muted sm:text-lg">
+            WINK.smartlayer brings voice biometrics, language understanding and payment settlement together in one layer that runs on your glasses.
+          </p>
+          <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <a href="#demo" className="rounded-2xl bg-fg px-6 py-3.5 text-sm font-semibold text-bg hover:bg-white/90 transition">
+              Try the live demo
+            </a>
+            <a href="#layers" className="rounded-2xl border border-line-strong px-6 py-3.5 text-sm font-semibold hover:bg-white/5 transition">
+              Revisit the layers
+            </a>
+          </div>
+        </div>
+      </Reveal>
+    </section>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="border-t border-line">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div>
+          <Logo />
+          <p className="mt-2 text-xs text-fg-dim">Autonomous, voice-authenticated ambient payments for smart eyewear.</p>
+        </div>
+        <div className="flex flex-wrap gap-x-6 gap-y-2 font-mono text-[11px] text-fg-dim">
+          <span>SpeechBrain ECAPA-TDNN</span>
+          <span>Gemini Flash</span>
+          <span>FastAPI · WebSocket</span>
+          <span>Next.js</span>
+        </div>
+      </div>
+    </footer>
   );
 }
